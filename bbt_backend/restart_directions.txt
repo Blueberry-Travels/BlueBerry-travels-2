@@ -1,0 +1,335 @@
+================================================================================
+BLUEBERRY TRAVEL PLATFORM — COLLEAGUE SETUP INSTRUCTIONS
+================================================================================
+For: New developer / colleague onboarding
+Project: blueberrytravels_backend (Django)
+Owner contact: tech@blueberrytravels.co
+================================================================================
+
+
+────────────────────────────────────────────────────────────────────────────────
+SECTION A — SYSTEM REQUIREMENTS
+────────────────────────────────────────────────────────────────────────────────
+
+Operating system: Debian 13 (Trixie) x86_64 recommended.
+Ubuntu 22.04+ also works.
+
+Required system packages (install via apt):
+
+  python3.13 and python3.13-venv
+  postgresql and postgresql-contrib (version 17 preferred)
+  redis-server (version 8 preferred)
+  libpango-1.0-0
+  libpangoft2-1.0-0
+  libcairo2
+  libgdk-pixbuf-xlib-2.0-0
+  libffi-dev
+  curl
+  zip / unzip
+
+Install command (run as sudo):
+  sudo apt update
+  sudo apt install -y python3.13 python3.13-venv python3-pip postgresql
+    postgresql-contrib redis-server libpango-1.0-0 libpangoft2-1.0-0
+    libcairo2 libgdk-pixbuf-xlib-2.0-0 libffi-dev curl
+
+
+────────────────────────────────────────────────────────────────────────────────
+SECTION B — DATABASE SETUP (run once)
+────────────────────────────────────────────────────────────────────────────────
+
+1. Start PostgreSQL:
+   sudo systemctl start postgresql
+
+2. Open PostgreSQL shell:
+   sudo -u postgres psql
+
+3. Inside the psql shell, run these commands exactly:
+   CREATE USER blueberry_user WITH PASSWORD '#ChaseInfinity07';
+   CREATE DATABASE blueberry_db OWNER blueberry_user;
+   GRANT ALL PRIVILEGES ON DATABASE blueberry_db TO blueberry_user;
+   \q
+
+4. Test the connection:
+   psql -U blueberry_user -h localhost -d blueberry_db -W
+   (Enter password: #ChaseInfinity07)
+   If you see a psql prompt, it worked. Type \q to exit.
+
+
+────────────────────────────────────────────────────────────────────────────────
+SECTION C — PROJECT SETUP (run once)
+────────────────────────────────────────────────────────────────────────────────
+
+1. Unzip the project backup into your home directory:
+   cd ~
+   unzip blueberry_backup_sessionX_YYYYMMDD.zip
+
+2. Enter the project folder:
+   cd ~/blueberrytravels_backend
+
+3. Create a Python virtual environment:
+   python3.13 -m venv venv
+
+4. Activate the virtual environment:
+   source venv/bin/activate
+   (You should see (venv) at the start of your terminal prompt)
+
+5. Install all Python packages:
+   pip install -r requirements.txt
+
+   If requirements.txt is missing, ask the project owner to run:
+   pip freeze > requirements.txt
+   on the original machine and share the file.
+
+6. Install WeasyPrint system dependency (for PDF generation):
+   sudo apt install -y libpango-1.0-0 libpangoft2-1.0-0 libcairo2
+     libgdk-pixbuf-xlib-2.0-0 libffi-dev
+   pip install weasyprint pillow
+
+7. Start Redis:
+   sudo systemctl start redis
+
+
+────────────────────────────────────────────────────────────────────────────────
+SECTION D — RUNNING MIGRATIONS (run once, and after any model change)
+────────────────────────────────────────────────────────────────────────────────
+
+With venv active and PostgreSQL running:
+
+   python manage.py migrate
+
+This applies all migrations in the correct order automatically.
+Expected output ends with lines like:
+  Applying engine_b2c.0006_promovoucher_voucherredemption... OK
+
+If you see errors, check that:
+  - PostgreSQL is running (sudo systemctl status postgresql)
+  - Database and user were created correctly (Section B)
+  - You are inside blueberrytravels_backend/ with venv active
+
+
+────────────────────────────────────────────────────────────────────────────────
+SECTION E — CREATING THE ADMIN USER (run once)
+────────────────────────────────────────────────────────────────────────────────
+
+1. Create superuser:
+   python manage.py createsuperuser --email tech@blueberrytravels.co
+   (When prompted: Name = Mr_Blueberry, Password = SuperAdmin@123)
+
+2. Set the admin role:
+   python manage.py shell -c "
+   from engine_meta.models import User
+   u = User.objects.get(email='tech@blueberrytravels.co')
+   u.roles = ['super_admin']
+   u.is_staff = True
+   u.is_superuser = True
+   u.save()
+   print('Done:', u.roles)
+   "
+
+3. Create the EngineConfig singleton:
+   python manage.py shell -c "
+   from engine_meta.models import EngineConfig
+   obj, created = EngineConfig.objects.get_or_create(id=1)
+   print('EngineConfig:', 'created' if created else 'already exists')
+   "
+
+4. Seed the third-party API config records:
+   python manage.py seed_api_configs
+
+   This creates 10 API records in the database (Razorpay, RedBus, IRCTC, etc.)
+   All start inactive. Credentials are pasted via Django admin later.
+
+
+────────────────────────────────────────────────────────────────────────────────
+SECTION F — TRAINING THE ML MODEL
+────────────────────────────────────────────────────────────────────────────────
+
+The training data file must be on the machine before running this.
+Default expected location: /home/<username>/Desktop/BLUEBERRY TRAINING DATA.md
+(Note: spaces in filename, no underscores)
+
+Train with default path:
+   python manage.py shell -c "
+   from engine_meta.ml.trainer import train
+   train()
+   "
+
+Train with a custom path:
+   python manage.py shell -c "
+   from engine_meta.ml.trainer import train
+   train(data_path='/your/path/to/BLUEBERRY TRAINING DATA.md')
+   "
+
+Expected output:
+   Loaded:    4859 training rows
+   Skipped:   854 fillers
+   Train    : MAE=0.059  R²=0.622
+   Validation: MAE=0.063  R²=0.595
+   Model saved: engine_meta/ml/trained_model.json (1099KB)
+   Done.
+
+If the trained_model.json is included in the backup zip, you can skip
+retraining entirely — the model is ready to use.
+
+To force-reload the model without restarting the server:
+   python manage.py shell -c "
+   from engine_meta.ml.scorer import reload_scorer
+   reload_scorer()
+   print('Scorer reloaded.')
+   "
+
+
+────────────────────────────────────────────────────────────────────────────────
+SECTION G — DAILY STARTUP SEQUENCE
+────────────────────────────────────────────────────────────────────────────────
+
+Run these every time you start working:
+
+1. Start PostgreSQL:
+   sudo systemctl start postgresql
+
+2. Start Redis:
+   sudo systemctl start redis
+
+3. Go to project and activate venv:
+   cd ~/blueberrytravels_backend
+   source venv/bin/activate
+
+4. Start the development server (HTTP only):
+   python manage.py runserver
+
+   OR start Daphne for HTTP + WebSocket support:
+   daphne -p 8000 blueberry_backend.asgi:application
+
+5. In a second terminal — start Celery worker (for async tasks):
+   cd ~/blueberrytravels_backend
+   source venv/bin/activate
+   celery -A blueberry_backend worker -l info
+
+6. In a third terminal — start Celery beat (for scheduled tasks):
+   cd ~/blueberrytravels_backend
+   source venv/bin/activate
+   celery -A blueberry_backend beat -l info \
+     --scheduler django_celery_beat.schedulers:DatabaseScheduler
+
+Server runs at: http://127.0.0.1:8000/
+Django admin:   http://127.0.0.1:8000/admin/
+
+
+────────────────────────────────────────────────────────────────────────────────
+SECTION H — VERIFYING EVERYTHING WORKS
+────────────────────────────────────────────────────────────────────────────────
+
+Run system check (should say 0 issues):
+   python manage.py check
+
+Test the regions endpoint (should return JSON):
+   curl http://localhost:8000/api/v1/regions/
+
+Test the itinerary build (should return empty nodes, no crash):
+   curl -X POST http://localhost:8000/api/v1/itinerary/build/
+     -H "Content-Type: application/json"
+     -d '{"region_id":"00000000-0000-0000-0000-000000000001",
+          "travel_style":0.25,"trip_days":2,"season":"winter"}'
+
+Test WeasyPrint (PDF generation):
+   python manage.py shell -c "
+   from weasyprint import HTML
+   pdf = HTML(string='<h1>Test</h1>').write_pdf()
+   print('PDF OK:', len(pdf), 'bytes')
+   "
+
+Test ML scorer:
+   python manage.py shell -c "
+   from engine_meta.ml.scorer import get_scorer
+   s = get_scorer()
+   print('Scorer ready:', s.is_ready)
+   print('Trees:', s._rf.n_trees if s._rf else 'N/A')
+   "
+
+
+────────────────────────────────────────────────────────────────────────────────
+SECTION I — KEY CREDENTIALS AND CONFIG
+────────────────────────────────────────────────────────────────────────────────
+
+Database:
+  Name:      blueberry_db
+  User:      blueberry_user
+  Password:  #ChaseInfinity07
+  Host:      localhost
+  Port:      5432
+
+Admin account:
+  Email:     tech@blueberrytravels.co
+  Username:  Mr_Blueberry
+  Password:  SuperAdmin@123
+  Role:      super_admin
+
+Django admin panel:
+  URL: http://localhost:8000/admin/
+
+Third-party API credentials:
+  All managed via Django admin → Third Party Api Configs
+  Paste credentials there — never hardcode in settings.py
+  APIs: Razorpay, RedBus, AbhiBus, IRCTC, Booking.com,
+        UIDAI, MRZ, WhatsApp, OSRM, BookMyShow
+
+
+────────────────────────────────────────────────────────────────────────────────
+SECTION J — IF SOMETHING BREAKS
+────────────────────────────────────────────────────────────────────────────────
+
+"connection refused" on migrate:
+  → PostgreSQL is not running. Run: sudo systemctl start postgresql
+
+"password authentication failed":
+  → Re-create the DB user (see Section B)
+
+"No module named X":
+  → venv not active. Run: source venv/bin/activate
+  → Or package missing. Run: pip install -r requirements.txt
+
+"WeasyPrint error" on PDF generation:
+  → Missing system libs. Run:
+    sudo apt install -y libpango-1.0-0 libpangoft2-1.0-0 libcairo2
+      libgdk-pixbuf-xlib-2.0-0
+
+"trained_model.json not found":
+  → Run the training step in Section F
+
+"Address already in use" on daphne:
+  → Kill whatever is on port 8000:
+    fuser -k 8000/tcp
+  → Then retry daphne
+
+Celery not processing tasks:
+  → Make sure Redis is running: sudo systemctl start redis
+  → Make sure Celery worker is running (Section G step 5)
+
+
+────────────────────────────────────────────────────────────────────────────────
+SECTION K — FILES TO KEEP SAFE (never lose these)
+────────────────────────────────────────────────────────────────────────────────
+
+  1. blueberry_backup_sessionX_YYYYMMDD.zip
+     The full project code. Keep multiple copies.
+
+  2. BLUEBERRY TRAINING DATA.md
+     The ML training dataset. Without this, the model cannot be retrained.
+     Location: Desktop (spaces in filename, no underscores)
+
+  3. BLUEBERRY_HANDOVER_SESSION4.md
+     Full technical documentation of every decision, model, endpoint,
+     and build state. Share this with Claude at the start of every
+     new session to continue where we left off.
+
+  4. trained_model.json (optional backup)
+     Location: engine_meta/ml/trained_model.json
+     1099KB. If lost, retrain using Section F — takes about 2 minutes.
+
+
+────────────────────────────────────────────────────────────────────────────────
+END OF SETUP INSTRUCTIONS
+Contact tech@blueberrytravels.co for any issues not covered here.
+================================================================================
