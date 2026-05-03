@@ -15,6 +15,9 @@ urlpatterns = [
     path('events/',                         booking_views.get_events,                name='events'),
     path('transport/buses/',                views.search_buses,                      name='search_buses'),
     path('transport/trains/',               views.search_trains,                     name='search_trains'),
+    path('packages/',                       views.list_packages,                     name='packages'),
+    path('misc-services/',                  views.list_misc_services,                name='misc_services'),
+
 
     # Itinerary
     path('itinerary/build/',                views.build_itinerary,                   name='build_itinerary'),

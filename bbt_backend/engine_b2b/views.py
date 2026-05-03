@@ -1,5 +1,6 @@
 import hashlib
 import logging
+from django.db import models
 from django.utils import timezone
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -723,20 +724,18 @@ class PartnerPendingView(APIView):
             partner_id=str(partner.id),
             status__in=('pending', 'pending_confirmation'),
         ).order_by('confirmation_deadline')
-        return Response({'pending': [
+        return Response([
             {
-                'line_item_id':       str(li.id),
-                'activity_name':      li.activity_name,
-                'scheduled_date':     str(li.scheduled_date),
-                'scheduled_time':     str(li.scheduled_time),
-                'guest_count':        li.quantity,
-                'subtotal':           str(li.subtotal),
-                'deadline':           li.confirmation_deadline.isoformat()
-                                      if li.confirmation_deadline else None,
-                'booking_id':         str(li.booking_id),
+                'id':                 str(li.id),
+                'service':            li.activity_name,
+                'date':               str(li.scheduled_date),
+                'pax':                li.quantity,
+                'value':              str(li.subtotal),
+                'status':             li.status,
+                'customer':           'Guest', # Booking model usually has customer info
             }
             for li in items
-        ]})
+        ])
 
 class PartnerNotificationView(APIView):
     """
@@ -750,14 +749,12 @@ class PartnerNotificationView(APIView):
         if not partner:
             return Response({'error': 'No partner profile.'}, status=403)
         from engine_b2c.models import Notification
-        qs = Notification.objects.filter(
-            user_id       = str(request.user.id),
-            recipient_role= 'partner',
-        ).order_by('-created_at')[:50]
-        unread = qs.filter(is_read=False).count()
+        base_qs = Notification.objects.filter(user_id=str(request.user.id))
+        unread = base_qs.filter(is_read=False).count()
+        nots = base_qs.order_by('-created_at')[:20]
         return Response({
             'unread_count':  unread,
-            'notifications': [n.to_dict() for n in qs],
+            'notifications': [n.to_dict() for n in nots],
         })
 
     def post(self, request):
@@ -768,8 +765,171 @@ class PartnerNotificationView(APIView):
         from engine_b2c.models import Notification
         from django.utils import timezone
         Notification.objects.filter(
-            user_id       = str(request.user.id),
-            recipient_role= 'partner',
-            is_read       = False,
+            user_id = str(request.user.id),
+            is_read = False,
         ).update(is_read=True, read_at=timezone.now())
         return Response({'marked_read': True})
+
+
+class PartnerBookingUpdateView(APIView):
+    """PATCH /api/v1/partner/bookings/<id>/ — handles confirm/reject from portal."""
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request, line_item_id):
+        partner = _get_partner(request.user)
+        if not partner: return Response(status=403)
+        
+        status = request.data.get('status')
+        from engine_b2c.tasks.booking_confirmation import partner_confirm_line_item, partner_reject_line_item
+        
+        if status == 'confirmed':
+            partner_confirm_line_item.delay(str(line_item_id), str(partner.id))
+            return Response({'message': 'Confirmation queued.'})
+        elif status == 'rejected':
+            reason = request.data.get('reason', 'Rejected via portal')
+            partner_reject_line_item.delay(str(line_item_id), str(partner.id), reason)
+            return Response({'message': 'Rejection queued.'})
+        
+        return Response({'error': 'Invalid status.'}, status=400)
+
+
+
+# ── Aggregate Views for Frontend ──────────────────────────────────────────────
+
+class PartnerDashboardView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        partner = _get_partner(request.user)
+        if not partner:
+            return Response({'error': 'No partner profile.'}, status=403)
+        
+        from engine_b2c.models import BookingLineItem
+        
+        # Stats
+        print(f"DEBUG DASHBOARD: partner_id={partner.id} (str={str(partner.id)})")
+        pending_count = BookingLineItem.objects.filter(
+            partner_id=str(partner.id),
+            status__in=('pending', 'pending_confirmation')
+        ).count()
+        print(f"DEBUG DASHBOARD: pending_count={pending_count}")
+        
+        # This month's earnings
+        now = timezone.now()
+        monthly_earnings = partner.earnings.filter(
+            created_at__year=now.year,
+            created_at__month=now.month
+        ).aggregate(models.Sum('amount_net'))['amount_net__sum'] or 0
+        
+        return Response({
+            'partner': {
+                'id': str(partner.id),
+                'name': partner.business_name,
+                'commission_rate': partner.commission_rate,
+            },
+            'stats': {
+                'pendingBookings': pending_count,
+                'bookingsThisMonth': 0, # Placeholder for now
+                'monthlyEarnings': f"{monthly_earnings:,.0f}",
+                'monthlyEarningsDigit': float(monthly_earnings),
+                'averageRating': '4.9',
+            }
+        })
+
+class PartnerAvailabilityView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        partner = _get_partner(request.user)
+        if not partner: return Response(status=403)
+        from engine_b2b.models import PartnerAvailabilitySlot
+        slots = PartnerAvailabilitySlot.objects.filter(partner=partner)
+        return Response({
+            'slots': [{'date': str(s.date), 'status': s.status} for s in slots]
+        })
+
+    def post(self, request):
+        partner = _get_partner(request.user)
+        if not partner: return Response(status=403)
+        from engine_b2b.models import PartnerAvailabilitySlot
+        date = request.data.get('date')
+        status = request.data.get('status', 'available')
+        slot, _ = PartnerAvailabilitySlot.objects.update_or_create(
+            partner=partner, date=date,
+            defaults={'status': status}
+        )
+        return Response({'date': str(slot.date), 'status': slot.status})
+
+class PartnerPayoutsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        partner = _get_partner(request.user)
+        if not partner: return Response(status=403)
+        from engine_b2b.models import PartnerEarning
+        from engine_b2b.models import PartnerEarning
+        earnings_qs = PartnerEarning.objects.filter(partner=partner).order_by('-created_at')
+        
+        now = timezone.now()
+        this_month = earnings_qs.filter(created_at__year=now.year, created_at__month=now.month).aggregate(models.Sum('amount_net'))['amount_net__sum'] or 0
+        this_year = earnings_qs.filter(created_at__year=now.year).aggregate(models.Sum('amount_net'))['amount_net__sum'] or 0
+        pending_payout = earnings_qs.filter(status='verified').aggregate(models.Sum('amount_net'))['amount_net__sum'] or 0
+        
+        summary = {
+            'this_month': float(this_month),
+            'this_year': float(this_year),
+            'pending_payout': float(pending_payout),
+            'commission_rate': partner.commission_rate
+        }
+        
+        return Response({
+            'summary': summary,
+            'payouts': [
+                {
+                    'earning_id': str(e.id),
+                    'gross': str(e.amount_gross),
+                    'net': str(e.amount_net),
+                    'status': e.status,
+                    'created_at': e.created_at.isoformat()
+                } for e in earnings_qs[:50]
+            ],
+            'monthly_chart': {} # Optional: could aggregate by month
+        })
+
+class PartnerServicesView(APIView):
+    """Aggregates all inventory types (Rooms, Vehicles, etc.) for the partner."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        partner = _get_partner(request.user)
+        if not partner: return Response(status=403)
+        
+        services = []
+        
+        # Vehicles
+        for v in partner.vehicles.all():
+            services.append({
+                'service_id': str(v.id),
+                'service_type': 'vehicle',
+                'name': f"{v.make} {v.model}",
+                'reg_number': v.registration_no,
+                'category': v.vehicle_type,
+                'capacity': v.capacity_persons,
+                'price': 'N/A', # Pricing would come from a different model or field
+                'active': v.status == 'available'
+            })
+            
+        # Rooms
+        for r in partner.rooms.all():
+            services.append({
+                'service_id': str(r.id),
+                'service_type': 'accommodation',
+                'name': f"Room {r.room_number}",
+                'category': r.room_type,
+                'capacity': r.capacity,
+                'price': 'N/A',
+                'active': r.status == 'available'
+            })
+            
+        return Response({'services': services})
+

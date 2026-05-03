@@ -350,3 +350,62 @@ def api_status(request):
             v for v in c.credentials.values() if v)),
     } for c in configs]
     return Response({'apis': data})
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def list_packages(request):
+    """GET /api/v1/packages/ — returns curated travel packages."""
+    from engine_b2c.models import Package
+    category = request.query_params.get('category')
+    
+    qs = Package.objects.filter(is_active=True)
+    if category and category != 'all':
+        qs = qs.filter(category=category)
+        
+    packages = []
+    for p in qs:
+        packages.append({
+            'package_id': str(p.id),
+            'name': p.name,
+            'short_desc': p.short_desc,
+            'description': p.description,
+            'category': p.category,
+            'days_count': p.days_count,
+            'base_pricing': {
+                'per_person_estimate': float(p.per_person_estimate),
+                'currency': p.currency
+            },
+            'image_url': p.image_url,
+            'is_coming_soon': p.is_coming_soon
+        })
+        
+    # If no packages exist, we can return arriving_soon: True to trigger the frontend placeholder
+    arriving_soon = len(packages) == 0
+    return Response({
+        'packages': packages,
+        'arriving_soon': arriving_soon
+    })
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def list_misc_services(request):
+    """GET /api/v1/misc-services/ — returns hobbyist kits, retreats, etc."""
+    from engine_b2c.models import MiscService
+    category = request.query_params.get('category')
+    
+    qs = MiscService.objects.filter(is_active=True)
+    if category:
+        qs = qs.filter(category=category)
+        
+    services = [{
+        'id': str(s.id),
+        'name': s.name,
+        'description': s.description,
+        'category': s.category,
+        'price': float(s.price),
+        'image_url': s.image_url
+    } for s in qs]
+    
+    return Response({'services': services})

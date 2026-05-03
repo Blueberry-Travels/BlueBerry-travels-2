@@ -1,8 +1,44 @@
-env/
-venv/
-__pycache__/
-*.pyc
-.DS_Store
-.vscode/
-node_modules/
-.env
+# Node.js
+**/node_modules/
+**/.next/
+**/out/
+**/build/
+.npm
+**/.DS_Store
+
+# Python
+**/venv/
+**/venv_win/
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+**/.Python
+**/env/
+**/pip-log.txt
+**/pip-delete-this-directory.txt
+**/.tox/
+**/.coverage
+**/.cache
+**/nosetests.xml
+**/coverage.xml
+**/*.cover
+**/.hypothesis/
+
+# Environment Variables & Secrets
+**/.env
+**/.env.local
+**/.env.*.local
+**/trained_model.json
+
+# Large files / Documentation backups
+**/*.zip
+**/*.tar.gz
+**/*.md.backup
+**/*.txt
+
+# IDEs
+**/.vscode/
+**/.idea/
+**/*.swp
+**/*.swo

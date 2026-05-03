@@ -726,3 +726,49 @@ class ActivityServiceAssignment(models.Model):
         if self.provider_is_guide and self.guide_partner:
             raise ValidationError(
                 'provider_is_guide cannot be True when guide_partner is set.')
+
+
+# ── Partner Earnings & Payouts ────────────────────────────────────────────────
+
+class PartnerEarning(models.Model):
+    id              = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    partner         = models.ForeignKey(PartnerProfile, on_delete=models.CASCADE, related_name='earnings')
+    
+    # Linked to a specific booking line item
+    booking_item_id = models.CharField(max_length=100, db_index=True)
+    
+    amount_gross    = models.DecimalField(max_digits=12, decimal_places=2)
+    commission_rate = models.FloatField(default=0.15)
+    amount_net      = models.DecimalField(max_digits=12, decimal_places=2)
+    
+    status          = models.CharField(max_length=20, choices=[
+                        ('pending', 'Pending'),
+                        ('verified', 'Verified'),
+                        ('paid', 'Paid')
+                      ], default='pending')
+    
+    paid_at         = models.DateTimeField(null=True, blank=True)
+    created_at      = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        app_label = 'engine_b2b'
+        db_table  = 'partner_earnings'
+
+
+class PartnerAvailabilitySlot(models.Model):
+    id              = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    partner         = models.ForeignKey(PartnerProfile, on_delete=models.CASCADE, related_name='availability')
+    
+    date            = models.DateField()
+    status          = models.CharField(max_length=20, choices=[
+                        ('available', 'Available'),
+                        ('blocked', 'Blocked'),
+                        ('booked', 'Fully Booked')
+                      ], default='available')
+    
+    created_at      = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        app_label = 'engine_b2b'
+        db_table  = 'partner_availability'
+        unique_together = ('partner', 'date')

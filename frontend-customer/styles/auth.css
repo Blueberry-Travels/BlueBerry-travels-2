@@ -1,0 +1,113 @@
+/* ══════════════════════════════════════════════
+   TOPBAR LOGIN BUTTON & AUTH STATES
+   ══════════════════════════════════════════════ */
+
+.topbar-login-btn {
+    height: 46px;
+    padding: 0 24px;
+    border: none;
+    border-radius: 14px;
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    color: #ffffff;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    justify-self: end;
+    box-shadow: 0 8px 20px rgba(76, 124, 53, 0.25);
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.topbar-login-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 28px rgba(76, 124, 53, 0.35);
+    filter: brightness(1.1);
+}
+
+.topbar-login-btn:active {
+    transform: translateY(0);
+}
+
+.topbar-login-icon {
+    font-size: 16px;
+}
+
+/* ---------- AVATAR INITIALS (topbar) ---------- */
+.id-photo-avatar {
+    height: 42px;
+    width: 42px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    color: #ffffff;
+    font-size: 15px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    letter-spacing: 0.02em;
+    flex-shrink: 0;
+    box-shadow: 0 4px 12px rgba(76, 124, 53, 0.2);
+}
+
+/* ---------- SIDEBAR GUEST / AUTH STATES ---------- */
+.sid-identity-guest {
+    opacity: 0.9;
+}
+
+.sid-avatar-guest {
+    font-size: 20px !important;
+    background: rgba(255,255,255,0.08) !important;
+    border: 1px dashed rgba(255,255,255,0.25) !important;
+}
+
+.sid-avatar-img {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid rgba(255,255,255,0.2);
+    flex-shrink: 0;
+}
+
+.sid-login-link {
+    display: inline-block;
+    margin-top: 6px;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--primary-light);
+    text-decoration: none;
+    transition: all 0.2s ease;
+}
+
+.sid-login-link:hover {
+    color: white;
+    text-shadow: 0 0 10px rgba(163, 201, 149, 0.5);
+}
+
+/* ---------- SIDEBAR LOGOUT BUTTON ---------- */
+.sid-logout-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    width: 100%;
+    text-align: left;
+    font: inherit;
+    color: #c0530a;
+    padding: 0;
+}
+
+/* hide login button text on tighter screens */
+@media (max-width: 1180px) {
+    .topbar-login-btn span:last-child {
+        display: none;
+    }
+
+    .topbar-login-btn {
+        padding: 0 12px;
+        min-width: auto;
+    }
+}

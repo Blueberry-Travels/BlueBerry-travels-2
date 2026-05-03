@@ -1,10 +1,12 @@
-from engine_meta import photo_views as meta_photo_views
-from django.urls import path
+from django.urls import path, include
 from engine_b2b import views
+from engine_meta import photo_views as meta_photo_views
 
 app_name = 'engine_b2b'
 
 urlpatterns = [
+    # Auth proxy
+    path('auth/',                                       include('engine_meta.urls')),
     # Profile and data consent
     path('profile/',                                    views.PartnerProfileView.as_view(),       name='profile'),
     path('profile/photo/', meta_photo_views.upload_partner_photo, name='upload_partner_photo'),
@@ -51,11 +53,18 @@ urlpatterns = [
     # Service assignments (incoming from bookings)
     path('assignments/',                                views.ServiceAssignmentView.as_view(),     name='assignment_list'),
     path('assignments/<uuid:assignment_id>/',           views.ServiceAssignmentView.as_view(),     name='assignment_detail'),
-    path('notifications/',                              views.PartnerNotificationView.as_view(),   name='partner_notifications'),
+    path('notifications/',                              views.PartnerNotificationView.as_view(),   name='partner_notifications_v2'),
+    
+    # Partner Portal Aggregate API (matches frontend lib/api.ts)
+    path('dashboard/',                                  views.PartnerDashboardView.as_view(),      name='dashboard'),
+    path('availability/',                               views.PartnerAvailabilityView.as_view(),   name='availability'),
+    path('payouts/',                                    views.PartnerPayoutsView.as_view(),        name='payouts'),
+    path('services/',                                   views.PartnerServicesView.as_view(),       name='services'),
+    path('bookings/',                                   views.PartnerPendingView.as_view(),        name='bookings'),
+    path('bookings/<uuid:line_item_id>/',               views.PartnerBookingUpdateView.as_view(),  name='booking_update'),
 
-    # Partner booking confirmation
+    # Legacy confirmation endpoints
     path('bookings/<uuid:line_item_id>/confirm/', views.PartnerConfirmView.as_view(), name='partner_confirm'),
     path('bookings/<uuid:line_item_id>/reject/',  views.PartnerRejectView.as_view(),  name='partner_reject'),
     path('bookings/pending/',                     views.PartnerPendingView.as_view(),  name='partner_pending'),
-
 ]

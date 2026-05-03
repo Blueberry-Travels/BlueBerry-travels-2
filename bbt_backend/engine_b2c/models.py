@@ -799,6 +799,73 @@ class Notification(models.Model):
 
     def to_dict(self):
         return {
+            'id': str(self.id),
+            'type': self.notification_type,
+            'title': self.title,
+            'body': self.body,
+            'booking_id': self.booking_id,
+            'action_url': self.action_url,
+            'metadata': self.metadata,
+            'is_read': self.is_read,
+            'created_at': self.created_at.isoformat(),
+        }
+
+
+# ── Curated Packages ──────────────────────────────────────────────────────────
+
+class Package(models.Model):
+    id          = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name        = models.CharField(max_length=255)
+    short_desc  = models.CharField(max_length=500)
+    description = models.TextField(blank=True, default='')
+    category    = models.CharField(max_length=30, choices=Activity.CATEGORY_CHOICES)
+    days_count  = models.PositiveIntegerField(default=1)
+    
+    # Base pricing estimate for display
+    per_person_estimate = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    currency            = models.CharField(max_length=3, default='INR')
+    
+    # Hero image
+    image_url   = models.URLField(blank=True, default='')
+    
+    # Structured itinerary (JSON snapshot of nodes)
+    itinerary_template = models.JSONField(default=list)
+    
+    is_active   = models.BooleanField(default=True)
+    is_coming_soon = models.BooleanField(default=False)
+    
+    created_at  = models.DateTimeField(auto_now_add=True)
+    updated_at  = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        app_label = 'engine_b2c'
+        db_table  = 'packages'
+        ordering  = ['-created_at']
+
+    def __str__(self):
+        return self.name
+
+
+class MiscService(models.Model):
+    """General services like 'Explore Around', 'Hobbyist Kits', etc."""
+    id          = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name        = models.CharField(max_length=255)
+    description = models.TextField(blank=True, default='')
+    category    = models.CharField(max_length=50) # e.g. 'hobbyist', 'explore', 'retreat'
+    price       = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    image_url   = models.URLField(blank=True, default='')
+    
+    is_active   = models.BooleanField(default=True)
+    created_at  = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        app_label = 'engine_b2c'
+        db_table  = 'misc_services'
+
+    def __str__(self):
+        return self.name
+
+        return {
             'id':                str(self.id),
             'type':              self.notification_type,
             'title':             self.title,
